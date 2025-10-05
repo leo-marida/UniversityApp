@@ -1,7 +1,7 @@
 // src/components/ErrorMessage.js
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../theme/theme';
+import { COLORS, SIZES } from '../theme/theme';
 
 const ErrorMessage = ({ message }) => (
   <View style={styles.container}>

@@ -1,7 +1,7 @@
 // src/api/universityApi.js
 import axios from 'axios';
 
-const API_URL = 'http://universities.hipolabs.com/search';
+const API_URL = 'https://universities.hipolabs.com/search';
 
 export const fetchUniversities = async (country = '', page = 1, limit = 20) => {
   try {
