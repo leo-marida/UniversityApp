@@ -9,7 +9,7 @@ import UniversityCard from '../components/UniversityCard';
 import LoadingIndicator from '../components/LoadingIndicator';
 import ErrorMessage from '../components/ErrorMessage';
 import { COLORS, SIZES } from '../theme/theme';
-
+import { initDB } from '../services/database';
 const BrowseScreen = () => {
   const [universities, setUniversities] = useState([]);
   const [countries, setCountries] = useState([]);
@@ -26,15 +26,23 @@ const BrowseScreen = () => {
   useEffect(() => {
     const initialize = async () => {
       setLoading(true);
-      const savedFilters = await loadFilters();
-      setSelectedCountry(savedFilters.country || '');
-      
-      const loadedFavorites = await loadFavorites();
-      setFavorites(loadedFavorites);
-
-      await loadCountries();
-      await loadUniversities(1, savedFilters.country || '');
-      setLoading(false);
+      try {
+        await initDB(); // Initialize the database first
+        
+        const savedFilters = await loadFilters();
+        setSelectedCountry(savedFilters.country || '');
+        
+        const loadedFavorites = await loadFavorites();
+        setFavorites(loadedFavorites);
+  
+        await loadCountries();
+        await loadUniversities(1, savedFilters.country || '');
+      } catch (e) {
+        setError('Failed to initialize and load data.');
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
     };
     initialize();
   }, []);
