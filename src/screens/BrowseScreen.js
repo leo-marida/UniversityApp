@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Modal, Button, TextInput } from 'react-native';
 import { WebView } from 'react-native-webview';
 import RNPickerSelect from 'react-native-picker-select';
+import { useFocusEffect } from '@react-navigation/native'; // <-- ADDED IMPORT
 import { fetchUniversities, fetchAllCountries } from '../api/universityApi';
 import { saveFavorites, loadFavorites, saveFilters, loadFilters } from '../services/storage';
 import UniversityCard from '../components/UniversityCard';
@@ -10,6 +11,7 @@ import LoadingIndicator from '../components/LoadingIndicator';
 import ErrorMessage from '../components/ErrorMessage';
 import { COLORS, SIZES } from '../theme/theme';
 import { initDB } from '../services/database';
+
 const BrowseScreen = () => {
   const [universities, setUniversities] = useState([]);
   const [countries, setCountries] = useState([]);
@@ -22,7 +24,7 @@ const BrowseScreen = () => {
   const [selectedUniversity, setSelectedUniversity] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Load initial data
+  // Load initial data only once when the component mounts
   useEffect(() => {
     const initialize = async () => {
       setLoading(true);
@@ -31,9 +33,8 @@ const BrowseScreen = () => {
         
         const savedFilters = await loadFilters();
         setSelectedCountry(savedFilters.country || '');
-        
-        const loadedFavorites = await loadFavorites();
-        setFavorites(loadedFavorites);
+  
+        // Favorites will be loaded by the useFocusEffect below
   
         await loadCountries();
         await loadUniversities(1, savedFilters.country || '');
@@ -47,6 +48,22 @@ const BrowseScreen = () => {
     initialize();
   }, []);
 
+  // --- THIS IS THE FIX ---
+  // This effect runs every time the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Define a function to reload favorites from storage
+      const refreshFavorites = async () => {
+        console.log('Browse screen focused, refreshing favorites...');
+        const loadedFavorites = await loadFavorites();
+        setFavorites(loadedFavorites);
+      };
+
+      refreshFavorites(); // Call the function when the screen is focused
+    }, []) // Empty dependency array ensures the callback is not recreated unnecessarily
+  );
+  // --- END OF FIX ---
+
   const loadCountries = async () => {
     try {
         const countryData = await fetchAllCountries();
@@ -57,7 +74,10 @@ const BrowseScreen = () => {
   };
 
   const loadUniversities = useCallback(async (pageNum, country) => {
-    setLoading(true);
+    // Only show the full-screen loading indicator on the first page load
+    if (pageNum === 1) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const newUniversities = await fetchUniversities(country, pageNum);
@@ -65,18 +85,24 @@ const BrowseScreen = () => {
     } catch (e) {
       setError('Failed to fetch universities. Please try again later.');
     } finally {
-      setLoading(false);
+      if (pageNum === 1) {
+        setLoading(false);
+      }
     }
   }, []);
 
   const handleCountryChange = (country) => {
     setSelectedCountry(country);
-    setPage(1);
+    setPage(1); // Reset to page 1 for a new filter
+    setUniversities([]); // Clear old results immediately for a better UX
     loadUniversities(1, country);
     saveFilters({ country });
   };
   
   const handleLoadMore = () => {
+    // Prevent multiple fetches while one is already in progress
+    if (loading) return;
+
     const newPage = page + 1;
     setPage(newPage);
     loadUniversities(newPage, selectedCountry);
@@ -122,7 +148,7 @@ const BrowseScreen = () => {
       {error ? <ErrorMessage message={error} /> : null}
       <FlatList
         data={filteredUniversities}
-        keyExtractor={(item, index) => item.name + index}
+        keyExtractor={(item) => item.id.toString()} // Use database ID for a more stable key
         renderItem={({ item }) => (
           <UniversityCard
             university={item}
@@ -133,13 +159,13 @@ const BrowseScreen = () => {
         )}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={loading && universities.length > 0 ? <LoadingIndicator /> : null}
+        ListFooterComponent={loading && universities.length > 0 ? <ActivityIndicator style={{ marginVertical: 20 }} /> : null}
       />
       <Modal
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
-        {selectedUniversity && (
+        {selectedUniversity && selectedUniversity.web_pages && selectedUniversity.web_pages[0] && (
           <>
             <WebView source={{ uri: selectedUniversity.web_pages[0] }} />
             <Button title="Close" onPress={() => setModalVisible(false)} />
